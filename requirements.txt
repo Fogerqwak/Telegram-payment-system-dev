@@ -1,0 +1,5 @@
+python-telegram-bot==21.11.1
+python-dotenv==1.0.1
+httpx==0.28.1
+stripe==12.5.0
+cryptography==44.0.2
