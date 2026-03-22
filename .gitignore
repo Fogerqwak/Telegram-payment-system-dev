@@ -1,6 +1,4 @@
-.env.*
-!.env.example
-
+.gitignore
 # Python
 __pycache__/
 *.py[cod]
