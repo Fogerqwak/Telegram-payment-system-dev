@@ -3,3 +3,7 @@ python-dotenv==1.0.1
 httpx==0.28.1
 stripe==12.5.0
 cryptography==44.0.2
+apscheduler>=3.10.4
+fastapi>=0.115.0
+uvicorn>=0.32.0
+pydantic-settings>=2.6.0

@@ -2,7 +2,7 @@
 
 Centralized Telegram bot for selling access to **private Telegram channels/groups** using:
 
-- **Crypto / stablecoins** via Coinbase Commerce (pluggable)
+- **Crypto Pay** ([`pay.crypt.bot`](https://pay.crypt.bot)) — USDT invoices via [@CryptoBot](https://t.me/CryptoBot)
 - **Stripe** (Checkout)
 - **PayPal** (v2 Orders API)
 
@@ -13,7 +13,7 @@ This repo is a clean base inspired by patterns in [`env0id/Bet-bot`](https://git
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 
 cp .env.example .env
 mkdir -p data
@@ -21,50 +21,62 @@ mkdir -p data
 python -m app.main
 ```
 
+The process runs **two services** in one event loop:
+
+- **Telegram** long polling (updates for messages and callback queries)
+- **FastAPI + Uvicorn** on `WEBHOOK_HOST` / `WEBHOOK_PORT` (default `0.0.0.0:8000`) for payment webhooks
+
+Point your provider webhook URLs at the public HTTPS address that forwards to that port (for example Stripe: `/webhooks/stripe`, Crypto Pay: `/webhooks/cryptobot`, PayPal: `/webhooks/paypal`). See comments in `app/webhooks/app.py` for which headers and secrets each route expects.
+
 ## Telegram setup (required)
 
 1. Create a bot with `@BotFather` and set `TELEGRAM_BOT_TOKEN`.
 2. Add the bot as an **admin** in the protected channel/group (`PROTECTED_CHAT_ID`) with permission to:
    - Invite users via link (Manage Chat / Invite Users)
-   - (Optional) Ban/unban members if you want revocation features
+   - Ban/unban members (used when subscriptions expire and for admin `/revoke`)
 3. Put your Telegram numeric user id into `ADMIN_USER_IDS` so you can administer plans and grants.
 
 ## How access works
 
-- User runs `/buy` → bot creates a payment with the chosen provider → returns a checkout URL.
-- Bot periodically checks payment status.
-- When paid, bot creates a **one-time invite link** and sends it to the user.
-- User joins the protected chat with that link.
+- User runs `/buy` → inline keyboard: **plan** → **provider** → **Pay now** (URL) and **Check payment**.
+- Plans are stored in SQLite (`plans` table), seeded on first run from `AVAILABLE_PLAN_IDS` and `PLAN_<id>_*` env vars (see `.env.example`).
+- The bot **polls** pending payments on a short interval and can also **confirm instantly** via HTTP webhooks (Stripe, Crypto Pay, PayPal).
+- When a payment is **paid**, the bot calls `grant_access`: creates a **short-lived one-time invite link** (10 minutes), sends it in DM, and extends the user’s subscription row.
+- **Expired subscriptions**: an hourly job deactivates them, bans then unbans the user in the protected chat (so they can rejoin only with a new invite), and notifies them to use `/buy` again.
 
 ## Payments
 
-This base supports **MOCK mode** so you can run without keys:
+**MOCK mode** (no external APIs):
 
-- Set `MOCK_PAYMENTS=true` in `.env` (default in `.env.example`)
-- Bot will generate “fake paid” checkouts after a short delay (for end-to-end testing).
+- Set `MOCK_PAYMENTS=true` in `.env` (default in `.env.example`).
+- The bot uses a fake checkout URL and marks the payment paid after a short delay for end-to-end testing.
 
-When you’re ready, disable mock and enable providers:
+**Real providers** — disable mock and enable only what you need (see `.env.example`):
 
-- Stripe: set `STRIPE_ENABLED=true` and `STRIPE_SECRET_KEY`
-- PayPal: set `PAYPAL_ENABLED=true` and credentials
-- Coinbase: set `COINBASE_ENABLED=true` and `COINBASE_API_KEY`
+| Provider   | Enable flag            | Notes |
+|-----------|------------------------|--------|
+| Stripe    | `STRIPE_ENABLED=true`  | Needs `STRIPE_SECRET_KEY`, success/cancel URLs, and `STRIPE_WEBHOOK_SECRET` for `/webhooks/stripe` |
+| PayPal    | `PAYPAL_ENABLED=true`  | Needs client id/secret, return/cancel URLs, and `PAYPAL_WEBHOOK_ID` for `/webhooks/paypal` |
+| Crypto Pay | `CRYPTOBOT_ENABLED=true` | Needs `CRYPTOBOT_TOKEN`; configure the webhook URL in [@CryptoBot](https://t.me/CryptoBot) → app → Webhooks |
 
 ## Commands
 
-- `/start` – intro
-- `/buy` – buy default plan
-- `/status <payment_id>` – check a payment
+- `/start` — intro and plan summary from the database
+- `/buy` — choose plan and provider (inline keyboards), then pay or check status
+- `/status <payment_id>` — refresh status from the provider (and grant access if already paid)
 
-Admin:
+**Admin**
 
-- `/setplan <plan_id> <name> <price_cents> <duration_days>`
-- `/grant <user_id> <days>`
-- `/revoke <user_id>`
+- `/setplan <plan_id> <name> <price_cents> <duration_days>` — upsert a plan in the database
+- `/grant <user_id> <days>` — extend access for a user (uses `DEFAULT_PLAN_ID` for the plan id)
+- `/revoke <user_id>` — remove subscription row for that user
 
-## Notes / next steps (recommended)
+## Configuration
 
-- Add webhooks (Stripe + Coinbase + PayPal) for instant confirmations
-- Add multi-plan UI with inline buttons
-- Add subscription renewals and grace periods
-- Add AML / fraud rules and manual review queue
+All settings are loaded with **pydantic-settings** from `.env`. Copy `.env.example` and fill in values; nothing secret should be hardcoded in code.
 
+## Optional next steps
+
+- Harden operational security (rate limits, idempotency keys, monitoring).
+- Add renewal reminders before `active_until`.
+- Add manual review or fraud rules if you scale volume.

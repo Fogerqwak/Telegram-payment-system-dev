@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 
-ProviderName = Literal["stripe", "paypal", "coinbase", "mock"]
+ProviderName = Literal["stripe", "paypal", "cryptobot", "mock"]
 
 
 @dataclass(frozen=True)

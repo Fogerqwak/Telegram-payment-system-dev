@@ -4,8 +4,8 @@ import secrets
 from dataclasses import dataclass
 
 from app.config import Plan, Settings
+from app.payments.cryptobot import CryptoBotProvider
 from app.payments.providers.base import PaymentProvider
-from app.payments.providers.coinbase_provider import CoinbaseCommerceProvider
 from app.payments.providers.mock_provider import MockProvider
 from app.payments.providers.paypal_provider import PayPalProvider
 from app.payments.providers.stripe_provider import StripeProvider
@@ -53,13 +53,12 @@ def build_providers(settings: Settings) -> Providers:
             )
         )
 
-    if settings.coinbase_enabled:
-        if not settings.coinbase_api_key:
-            raise RuntimeError("Coinbase enabled but COINBASE_API_KEY missing")
-        providers.append(CoinbaseCommerceProvider(api_key=settings.coinbase_api_key))
+    if settings.cryptobot_enabled:
+        if not settings.cryptobot_token:
+            raise RuntimeError("CryptoBot enabled but CRYPTOBOT_TOKEN missing")
+        providers.append(CryptoBotProvider(api_token=settings.cryptobot_token))
 
     if not providers:
-        # Always allow local testing even if user forgot config.
         providers.append(MockProvider())
 
     return Providers(ordered=providers)
@@ -73,3 +72,9 @@ def describe(plan: Plan, currency: str) -> str:
     price = f"{plan.price_cents / 100:.2f} {currency.upper()}"
     return f"{plan.name} ({price})"
 
+
+def get_provider_by_name(providers: Providers, name: str):
+    for p in providers.ordered:
+        if p.name == name:
+            return p
+    raise RuntimeError(f"Provider not found: {name}")
