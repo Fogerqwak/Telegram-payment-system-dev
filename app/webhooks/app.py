@@ -13,7 +13,7 @@ from stripe.error import SignatureVerificationError
 from telegram.ext import Application
 
 
-from app.config import Settings, resolve_plan
+from app.config import Settings
 from app.db import Database
 from app.payments.cryptobot import map_cryptobot_status, parse_cryptobot_webhook_body, verify_cryptobot_signature
 from app.services.access import grant_access
@@ -106,8 +106,13 @@ async def _mark_paid_and_grant(
     if pay.status == "paid":
         return
     db.update_payment_status(payment_id, "paid", provider_ref)
-    plan = resolve_plan(db, pay.plan_id)
-    await grant_access(bot=bot, db=db, settings=settings, user_id=pay.user_id, plan=plan)
+    await grant_access(
+        bot=bot,
+        db=db,
+        settings=settings,
+        user_id=pay.user_id,
+        plan_id=pay.plan_id,
+    )
 
 
 def create_webhook_app(application: Application) -> FastAPI:

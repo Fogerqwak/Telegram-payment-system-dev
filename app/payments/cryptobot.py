@@ -51,7 +51,7 @@ class CryptoBotProvider(PaymentProvider):
             raise RuntimeError(f"CryptoBot createInvoice failed: {data!r}")
         inv = data["result"]
         invoice_id = str(inv["invoice_id"])
-        pay_url = str(inv["pay_url"])
+        pay_url = str(inv.get("bot_invoice_url") or inv.get("pay_url") or "")
         return CreatePaymentResult(provider="cryptobot", provider_ref=invoice_id, checkout_url=pay_url)
 
     async def verify_payment(self, *, provider_ref: str) -> VerifyResult:
@@ -71,9 +71,17 @@ class CryptoBotProvider(PaymentProvider):
         status = str(items[0].get("status") or "").lower()
         if status == "paid":
             return VerifyResult(status="paid", provider_ref=provider_ref)
+        if status == "expired":
+            return VerifyResult(status="expired", provider_ref=provider_ref)
         if status == "active":
             return VerifyResult(status="pending", provider_ref=provider_ref)
         return VerifyResult(status="pending", provider_ref=provider_ref)
+
+    async def handle_webhook(self, *, body: bytes, signature_header: str | None) -> tuple[str, VerifyResult]:
+        if not verify_cryptobot_signature(body=body, signature_header=signature_header, token=self._token):
+            raise ValueError("Invalid CryptoBot signature")
+        invoice_id, raw_status = parse_cryptobot_webhook_body(body)
+        return invoice_id, map_cryptobot_status(raw_status)
 
 
 def verify_cryptobot_signature(*, body: bytes, signature_header: str | None, token: str) -> bool:
@@ -104,6 +112,8 @@ def map_cryptobot_status(raw: str) -> VerifyResult:
     s = raw.lower()
     if s == "paid":
         return VerifyResult(status="paid")
+    if s == "expired":
+        return VerifyResult(status="expired")
     if s == "active":
         return VerifyResult(status="pending")
     return VerifyResult(status="pending")

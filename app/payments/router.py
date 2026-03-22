@@ -3,12 +3,15 @@ from __future__ import annotations
 import secrets
 from dataclasses import dataclass
 
+from telegram import Bot
+
 from app.config import Plan, Settings
 from app.payments.cryptobot import CryptoBotProvider
 from app.payments.providers.base import PaymentProvider
 from app.payments.providers.mock_provider import MockProvider
 from app.payments.providers.paypal_provider import PayPalProvider
 from app.payments.providers.stripe_provider import StripeProvider
+from app.payments.stars import StarsProvider
 
 
 @dataclass(frozen=True)
@@ -16,11 +19,12 @@ class Providers:
     ordered: list[PaymentProvider]
 
 
-def build_providers(settings: Settings) -> Providers:
+def build_providers(settings: Settings, *, bot: Bot | None = None) -> Providers:
+    """Build enabled providers. Stars first when enabled; mock last for tests."""
     providers: list[PaymentProvider] = []
 
-    if settings.mock_payments:
-        providers.append(MockProvider())
+    if settings.stars_enabled and bot is not None:
+        providers.append(StarsProvider(bot=bot))
 
     if settings.stripe_enabled:
         if not (settings.stripe_secret_key and settings.stripe_success_url and settings.stripe_cancel_url):
@@ -58,6 +62,9 @@ def build_providers(settings: Settings) -> Providers:
             raise RuntimeError("CryptoBot enabled but CRYPTOBOT_TOKEN missing")
         providers.append(CryptoBotProvider(api_token=settings.cryptobot_token))
 
+    if settings.mock_payments:
+        providers.append(MockProvider())
+
     if not providers:
         providers.append(MockProvider())
 
@@ -73,7 +80,7 @@ def describe(plan: Plan, currency: str) -> str:
     return f"{plan.name} ({price})"
 
 
-def get_provider_by_name(providers: Providers, name: str):
+def get_provider_by_name(providers: Providers, name: str) -> PaymentProvider:
     for p in providers.ordered:
         if p.name == name:
             return p

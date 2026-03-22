@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from telegram.ext import ContextTypes
 
-from app.config import Settings, resolve_plan
+from app.config import Settings
 from app.db import Database
 from app.payments.router import Providers, get_provider_by_name
 from app.services.access import grant_access
@@ -17,6 +17,8 @@ async def payment_verifier_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     for p in pending:
         if not p.provider_ref:
             continue
+        if p.provider == "stars":
+            continue
 
         provider = get_provider_by_name(providers, p.provider)
         vr = await provider.verify_payment(provider_ref=p.provider_ref)
@@ -24,13 +26,12 @@ async def payment_verifier_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         if vr.status == "paid":
             if p.status != "paid":
                 db.update_payment_status(p.payment_id, "paid", vr.provider_ref)
-                plan = resolve_plan(db, p.plan_id)
                 await grant_access(
                     bot=context.bot,
                     db=db,
                     settings=settings,
                     user_id=p.user_id,
-                    plan=plan,
+                    plan_id=p.plan_id,
                 )
         elif vr.status in {"failed", "cancelled", "expired"}:
             if p.status not in {"paid", vr.status}:

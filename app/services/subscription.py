@@ -24,7 +24,7 @@ async def expire_subscriptions(bot: Bot, settings: Settings, db: Database) -> No
         try:
             await bot.send_message(
                 chat_id=uid,
-                text="Your subscription has expired. Use /buy to renew.",
+                text="⏰ Ваша подписка истекла. Нажмите /buy чтобы продлить.",
             )
         except Exception:
             logger.exception("notify expiry failed for user %s", uid)

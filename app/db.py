@@ -44,6 +44,7 @@ class PlanRecord:
     name: str
     price_cents: int
     duration_days: int
+    stars_price: int = 100
 
 
 class Database:
@@ -62,6 +63,10 @@ class Database:
         sub_cols = {r[1] for r in conn.execute("PRAGMA table_info(subscriptions)").fetchall()}
         if sub_cols and "active" not in sub_cols:
             conn.execute("ALTER TABLE subscriptions ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
+
+        plan_cols = {r[1] for r in conn.execute("PRAGMA table_info(plans)").fetchall()}
+        if plan_cols and "stars_price" not in plan_cols:
+            conn.execute("ALTER TABLE plans ADD COLUMN stars_price INTEGER NOT NULL DEFAULT 100")
 
         pay_indexes = {
             str(r[0]) for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='payments'").fetchall()
@@ -114,7 +119,8 @@ class Database:
                   plan_id TEXT PRIMARY KEY,
                   name TEXT NOT NULL,
                   price_cents INTEGER NOT NULL,
-                  duration_days INTEGER NOT NULL
+                  duration_days INTEGER NOT NULL,
+                  stars_price INTEGER NOT NULL DEFAULT 100
                 );
                 """
             )
@@ -254,14 +260,15 @@ class Database:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO plans(plan_id, name, price_cents, duration_days)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO plans(plan_id, name, price_cents, duration_days, stars_price)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(plan_id) DO UPDATE SET
                   name=excluded.name,
                   price_cents=excluded.price_cents,
-                  duration_days=excluded.duration_days
+                  duration_days=excluded.duration_days,
+                  stars_price=excluded.stars_price
                 """,
-                (plan.plan_id, plan.name, plan.price_cents, plan.duration_days),
+                (plan.plan_id, plan.name, plan.price_cents, plan.duration_days, plan.stars_price),
             )
 
     def add_days(self, user_id: int, plan_id: str, days: int) -> Subscription:
@@ -301,9 +308,11 @@ class Database:
 
     @staticmethod
     def _row_to_plan(row: sqlite3.Row) -> PlanRecord:
+        sp = row["stars_price"] if "stars_price" in row.keys() else 100
         return PlanRecord(
             plan_id=str(row["plan_id"]),
             name=str(row["name"]),
             price_cents=int(row["price_cents"]),
             duration_days=int(row["duration_days"]),
+            stars_price=int(sp),
         )
