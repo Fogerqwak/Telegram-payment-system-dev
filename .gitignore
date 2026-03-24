@@ -23,6 +23,8 @@ ENV/
 data/
 *.sqlite3
 *.db
+.env
+.env.example
 
 # Logs
 *.log

@@ -19,7 +19,7 @@ class Plan:
     name: str
     price_cents: int
     duration_days: int
-    stars_price: int = 100
+    stars_price: int = 2600
 
 
 class Settings(BaseSettings):
@@ -34,15 +34,15 @@ class Settings(BaseSettings):
     protected_chat_id: int
     invite_link_expire_seconds: int = Field(default=3600)
     db_path: Path = Field(default=Path("./data/bot.sqlite3"))
-    display_currency: str = Field(default="USD")
+    display_currency: str = Field(default="EUR")
     default_plan_id: str = Field(default="monthly")
     available_plan_ids: str = Field(default="monthly", description="Comma-separated plan_ids seeded / shown in /buy")
 
     mock_payments: bool = Field(default=True)
 
-    stars_enabled: bool = Field(default=False)
+    stars_enabled: bool = Field(default=True)
 
-    stripe_enabled: bool = False
+    stripe_enabled: bool = True
     stripe_secret_key: str | None = None
     stripe_success_url: str | None = None
     stripe_cancel_url: str | None = None
@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     paypal_cancel_url: str | None = None
     paypal_webhook_id: str | None = None
 
-    cryptobot_enabled: bool = False
+    cryptobot_enabled: bool = True
     cryptobot_token: str | None = None
 
     webhook_host: str = Field(default="0.0.0.0")
@@ -97,9 +97,9 @@ def load_plan(plan_id: str) -> Plan:
     price_raw = os.getenv(f"PLAN_{plan_id}_PRICE_CENTS")
     duration_raw = os.getenv(f"PLAN_{plan_id}_DURATION_DAYS")
     stars_raw = os.getenv(f"PLAN_{plan_id}_STARS_PRICE")
-    price_cents = int(price_raw) if price_raw not in (None, "") else 999
-    duration_days = int(duration_raw) if duration_raw not in (None, "") else 30
-    stars_price = int(stars_raw) if stars_raw not in (None, "") else 100
+    price_cents = int(price_raw) if price_raw not in (None, "") else 3999
+    duration_days = int(duration_raw) if duration_raw not in (None, "") else 90
+    stars_price = int(stars_raw) if stars_raw not in (None, "") else 2600
     return Plan(
         plan_id=plan_id,
         name=name,
