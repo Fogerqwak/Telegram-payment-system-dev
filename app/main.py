@@ -17,6 +17,7 @@ from telegram.ext import (
 from app.config import load_settings, seed_plans_from_settings
 from app.db import Database
 from app.handlers import (
+    MAIN_MENU_BUY_STATUS_FILTER,
     buy_start,
     cb_check_pay,
     cmd_buy,
@@ -25,6 +26,7 @@ from app.handlers import (
     cmd_setplan,
     cmd_start,
     cmd_status,
+    main_menu_buy_or_status,
     payment_verifier_job,
     plan_selected,
     provider_selected,
@@ -67,6 +69,8 @@ def build_app() -> Application:
     application.add_handler(CommandHandler("setplan", cmd_setplan))
     application.add_handler(CommandHandler("grant", cmd_grant))
     application.add_handler(CommandHandler("revoke", cmd_revoke))
+
+    application.add_handler(MessageHandler(MAIN_MENU_BUY_STATUS_FILTER, main_menu_buy_or_status))
 
     application.add_handler(CallbackQueryHandler(plan_selected, pattern=r"^plan:"))
     application.add_handler(CallbackQueryHandler(provider_selected, pattern=r"^pay:"))

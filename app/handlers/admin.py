@@ -29,7 +29,7 @@ async def cmd_setplan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     name = context.args[1].strip()
     price_cents = int(context.args[2].strip())
     duration_days = int(context.args[3].strip())
-    stars_price = int(context.args[4].strip()) if len(context.args) >= 5 else 100
+    stars_price = int(context.args[4].strip()) if len(context.args) >= 5 else 2600
     db.upsert_plan_record(
         PlanRecord(
             plan_id=plan_id,

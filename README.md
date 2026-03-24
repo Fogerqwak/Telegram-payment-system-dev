@@ -43,9 +43,10 @@ Details are in `app/webhooks/app.py`.
 
 ## How access works
 
-- User runs `/buy` → **three steps** (inline keyboards): **choose plan** → **choose payment method** → **pay** (Stars opens an invoice in the chat; other providers get a **Pay** URL plus **Check payment**).
+- After `/start`, the bot shows a **reply keyboard** under the message input (persistent menu): **Купить**, **Статус**, **Поддержка** — same actions as `/buy`, `/status` (subscription), and `/support`. Inline buttons under messages are still used for plan and payment method selection.
+- User runs `/buy` (or taps **Купить**) → **three steps** (inline keyboards): **choose plan** → **choose payment method** → **pay** (Stars opens an invoice in the chat; other providers get a **Pay** URL plus **Check payment**).
 - **Telegram Stars** is listed first when `STARS_ENABLED=true`. No external checkout URL: the bot calls `send_invoice` with `currency=XTR` and `provider_token=""`.
-- Plans live in SQLite (`plans` table), seeded on first run from `AVAILABLE_PLAN_IDS` and `PLAN_<id>_*` env vars (including `PLAN_<id>_STARS_PRICE` for Stars amounts). Each plan has `price_cents`, `duration_days`, and `stars_price`.
+- Plans live in SQLite (`plans` table), seeded on first run from `AVAILABLE_PLAN_IDS` and `PLAN_<id>_*` env vars (including `PLAN_<id>_STARS_PRICE` for Stars amounts). Each plan has `price_cents`, `duration_days`, and `stars_price`. The stock example is one **3‑month** tier at **39,99 €** (`quarterly` in `.env.example`; `DISPLAY_CURRENCY=EUR`).
 - **Stripe / Crypto Pay / PayPal**: pending payments are **polled** on a short interval and can be **confirmed** via HTTP webhooks. **Stars** are **not** polled; confirmation is **push-only** (`PreCheckoutQuery` + `SuccessfulPayment`).
 - When payment is confirmed, the bot calls `grant_access`: extends the subscription (`add_days` / stacking), creates a **one-time invite link** (15 minutes, `member_limit=1`), and sends a Russian DM with the link and subscription end date.
 - **Expired subscriptions**: an **hourly** job (scheduler, `UTC`) deactivates expired rows, bans then unbans the user in the protected chat, and sends a Russian reminder to run `/buy`.
@@ -68,14 +69,14 @@ Details are in `app/webhooks/app.py`.
 
 ## Commands
 
-- `/start` — short welcome (Russian).
-- `/buy` — plan → provider → pay or wait for Stars invoice (Russian UI).
+- `/start` — short welcome (Russian) and **reply keyboard** under the text field (Купить / Статус / Поддержка).
+- `/buy` — plan → provider → pay or wait for Stars invoice (Russian UI). Same as the **Купить** menu button.
 - `/status` — without arguments: **subscription** status (active until date or not found). With `<payment_id>`: payment status and provider refresh (where applicable).
 - `/support` — private chat: forward messages to support recipients (see `SUPPORT_USER_IDS`).
 
 **Admin**
 
-- `/setplan <plan_id> <name> <price_cents> <duration_days> [stars_price]` — upsert a plan (default `stars_price` is `100` if omitted).
+- `/setplan <plan_id> <name> <price_cents> <duration_days> [stars_price]` — upsert a plan (default `stars_price` is `2600` if omitted).
 - `/grant <user_id> <days>` — extend access (uses `DEFAULT_PLAN_ID` for the plan id).
 - `/revoke <user_id>` — remove subscription row for that user.
 

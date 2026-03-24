@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
@@ -15,11 +16,21 @@ from telegram.ext import (
 
 from app.config import Settings, resolve_plan
 from app.db import Database, utcnow
+from app.keyboards import (
+    BTN_MENU_BUY,
+    BTN_MENU_STATUS,
+    BTN_MENU_SUPPORT,
+    main_menu_reply_markup,
+)
 from app.payments.router import Providers, describe, generate_payment_id, get_provider_by_name
 from app.services.access import grant_access
 
 
 logger = logging.getLogger(__name__)
+
+MAIN_MENU_BUY_STATUS_FILTER = filters.ChatType.PRIVATE & filters.TEXT & filters.Regex(
+    rf"^({re.escape(BTN_MENU_BUY)}|{re.escape(BTN_MENU_STATUS)})$"
+)
 
 
 def _provider_key_to_name(key: str) -> str:
@@ -65,7 +76,8 @@ def _provider_keyboard(settings: Settings, plan_id: str) -> InlineKeyboardMarkup
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(
-        "Добро пожаловать! Нажмите /buy чтобы получить доступ."
+        "Добро пожаловать! Нажмите «Купить» или /buy чтобы получить доступ.",
+        reply_markup=main_menu_reply_markup(),
     )
 
 
@@ -74,7 +86,8 @@ async def cmd_buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     plans = db.list_plans()
     if not plans:
         await update.effective_message.reply_text(
-            "Планы не настроены. Обратитесь к администратору."
+            "Планы не настроены. Обратитесь к администратору.",
+            reply_markup=main_menu_reply_markup(),
         )
         return
     await update.effective_message.reply_text(
@@ -244,29 +257,48 @@ async def cb_check_pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
+async def reply_subscription_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    db: Database = context.application.bot_data["db"]
+    user = update.effective_user
+    if not user:
+        return
+    sub = db.get_subscription(user.id)
+    now = utcnow()
+    mk = main_menu_reply_markup()
+    if sub and sub.active and sub.active_until > now:
+        await update.effective_message.reply_text(
+            f"✅ Подписка активна до {sub.active_until.strftime('%d.%m.%Y')}",
+            reply_markup=mk,
+        )
+    else:
+        await update.effective_message.reply_text("❌ Подписка не найдена", reply_markup=mk)
+
+
+async def main_menu_buy_or_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    if not message or not message.text:
+        return
+    text = message.text.strip()
+    if text == BTN_MENU_BUY:
+        await cmd_buy(update, context)
+    elif text == BTN_MENU_STATUS:
+        await reply_subscription_status(update, context)
+
+
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db: Database = context.application.bot_data["db"]
     providers: Providers = context.application.bot_data["providers"]
     settings: Settings = context.application.bot_data["settings"]
+    mk = main_menu_reply_markup()
 
     if not context.args:
-        user = update.effective_user
-        if not user:
-            return
-        sub = db.get_subscription(user.id)
-        now = utcnow()
-        if sub and sub.active and sub.active_until > now:
-            await update.effective_message.reply_text(
-                f"✅ Подписка активна до {sub.active_until.strftime('%d.%m.%Y')}"
-            )
-        else:
-            await update.effective_message.reply_text("❌ Подписка не найдена")
+        await reply_subscription_status(update, context)
         return
 
     payment_id = context.args[0].strip()
     payment = db.get_payment(payment_id)
     if not payment:
-        await update.effective_message.reply_text("Платёж не найден.")
+        await update.effective_message.reply_text("Платёж не найден.", reply_markup=mk)
         return
 
     if payment.provider_ref:
@@ -288,6 +320,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await update.effective_message.reply_text(
         f"Статус платежа `{payment.payment_id}`: **{payment.status}**",
         parse_mode=ParseMode.MARKDOWN,
+        reply_markup=mk,
     )
 
 
@@ -326,14 +359,16 @@ async def support_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     if not message:
         return ConversationHandler.END
     settings: Settings = context.application.bot_data["settings"]
+    mk = main_menu_reply_markup()
     if not settings.support_recipient_ids():
-        await message.reply_text("Поддержка пока не настроена. Попробуйте позже.")
+        await message.reply_text("Поддержка пока не настроена. Попробуйте позже.", reply_markup=mk)
         return ConversationHandler.END
     await message.reply_text(
         "Отправьте сообщение в поддержку (текст или вложения). "
         "Можно отправить несколько сообщений. "
         "Когда закончите, отправьте /cancel.\n\n"
-        "Для других команд бота (например /buy) сначала отправьте /cancel."
+        "Для других команд бота (например /buy) сначала отправьте /cancel.",
+        reply_markup=mk,
     )
     return WAITING_SUPPORT
 
@@ -342,9 +377,23 @@ async def support_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     message = update.effective_message
     if not message:
         return WAITING_SUPPORT
+    if message.text:
+        t = message.text.strip()
+        if t in (BTN_MENU_BUY, BTN_MENU_STATUS):
+            await message.reply_text(
+                "Выйдите из чата поддержки командой /cancel, затем снова нажмите кнопку в меню.",
+                reply_markup=main_menu_reply_markup(),
+            )
+            return WAITING_SUPPORT
+        if t == BTN_MENU_SUPPORT:
+            await message.reply_text(
+                "Вы уже в режиме поддержки. Отправьте сообщение или /cancel.",
+                reply_markup=main_menu_reply_markup(),
+            )
+            return WAITING_SUPPORT
     settings: Settings = context.application.bot_data["settings"]
     if not settings.support_recipient_ids():
-        await message.reply_text("Поддержка не настроена.")
+        await message.reply_text("Поддержка не настроена.", reply_markup=main_menu_reply_markup())
         return ConversationHandler.END
     chat = update.effective_chat
     if not chat:
@@ -352,25 +401,31 @@ async def support_receive(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     ok, _fail = await _forward_support_message(
         context, settings, from_chat_id=chat.id, message_id=message.message_id
     )
+    mk = main_menu_reply_markup()
     if ok == 0:
         await message.reply_text(
-            "Не удалось доставить сообщение. Попробуйте позже или свяжитесь с нами иначе."
+            "Не удалось доставить сообщение. Попробуйте позже или свяжитесь с нами иначе.",
+            reply_markup=mk,
         )
     else:
-        await message.reply_text("Сообщение отправлено в поддержку.")
+        await message.reply_text("Сообщение отправлено в поддержку.", reply_markup=mk)
     return WAITING_SUPPORT
 
 
 async def support_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     message = update.effective_message
     if message:
-        await message.reply_text("Чат с поддержкой закрыт.")
+        await message.reply_text("Чат с поддержкой закрыт.", reply_markup=main_menu_reply_markup())
     return ConversationHandler.END
 
 
 support_conversation_handler = ConversationHandler(
     entry_points=[
         CommandHandler("support", support_entry, filters=filters.ChatType.PRIVATE),
+        MessageHandler(
+            filters.ChatType.PRIVATE & filters.TEXT & filters.Regex(f"^{re.escape(BTN_MENU_SUPPORT)}$"),
+            support_entry,
+        ),
     ],
     states={
         WAITING_SUPPORT: [

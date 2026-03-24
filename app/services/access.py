@@ -6,6 +6,7 @@ from telegram import Bot
 
 from app.config import Settings, resolve_plan
 from app.db import Database, utcnow
+from app.keyboards import main_menu_reply_markup
 
 
 async def grant_access(
@@ -36,4 +37,5 @@ async def grant_access(
             f"{link.invite_link}\n\n"
             "⚠️ Ссылка одноразовая — не передавайте её другим."
         ),
+        reply_markup=main_menu_reply_markup(),
     )

@@ -44,7 +44,7 @@ class PlanRecord:
     name: str
     price_cents: int
     duration_days: int
-    stars_price: int = 100
+    stars_price: int = 2600
 
 
 class Database:
@@ -66,7 +66,7 @@ class Database:
 
         plan_cols = {r[1] for r in conn.execute("PRAGMA table_info(plans)").fetchall()}
         if plan_cols and "stars_price" not in plan_cols:
-            conn.execute("ALTER TABLE plans ADD COLUMN stars_price INTEGER NOT NULL DEFAULT 100")
+            conn.execute("ALTER TABLE plans ADD COLUMN stars_price INTEGER NOT NULL DEFAULT 2600")
 
         pay_indexes = {
             str(r[0]) for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='payments'").fetchall()
@@ -120,7 +120,7 @@ class Database:
                   name TEXT NOT NULL,
                   price_cents INTEGER NOT NULL,
                   duration_days INTEGER NOT NULL,
-                  stars_price INTEGER NOT NULL DEFAULT 100
+                  stars_price INTEGER NOT NULL DEFAULT 2600
                 );
                 """
             )
@@ -308,7 +308,7 @@ class Database:
 
     @staticmethod
     def _row_to_plan(row: sqlite3.Row) -> PlanRecord:
-        sp = row["stars_price"] if "stars_price" in row.keys() else 100
+        sp = row["stars_price"] if "stars_price" in row.keys() else 2600
         return PlanRecord(
             plan_id=str(row["plan_id"]),
             name=str(row["name"]),

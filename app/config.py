@@ -35,8 +35,8 @@ class Settings(BaseSettings):
     invite_link_expire_seconds: int = Field(default=3600)
     db_path: Path = Field(default=Path("./data/bot.sqlite3"))
     display_currency: str = Field(default="EUR")
-    default_plan_id: str = Field(default="monthly")
-    available_plan_ids: str = Field(default="monthly", description="Comma-separated plan_ids seeded / shown in /buy")
+    default_plan_id: str = Field(default="quarterly")
+    available_plan_ids: str = Field(default="quarterly", description="Comma-separated plan_ids seeded / shown in /buy")
 
     mock_payments: bool = Field(default=True)
 
@@ -93,7 +93,9 @@ def load_settings() -> Settings:
 def load_plan(plan_id: str) -> Plan:
     """Load plan fields from env (PLAN_<id>_*) for seeding and fallback."""
     load_dotenv()
-    name = (os.getenv(f"PLAN_{plan_id}_NAME") or "").strip() or plan_id
+    name = (os.getenv(f"PLAN_{plan_id}_NAME") or "").strip()
+    if not name:
+        name = "3 месяца — 39,99 €" if plan_id == "quarterly" else plan_id
     price_raw = os.getenv(f"PLAN_{plan_id}_PRICE_CENTS")
     duration_raw = os.getenv(f"PLAN_{plan_id}_DURATION_DAYS")
     stars_raw = os.getenv(f"PLAN_{plan_id}_STARS_PRICE")
